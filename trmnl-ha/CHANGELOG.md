@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-09-28
+
+### Added
+
+- A "Fit crop to viewport" option that scales a cropped capture up to the screen size, padded with white, so clients that draw the image as-is (like the Kindle client) fill the screen (#118)
+- A choice of corner for the capture time, and the stamp now grows on wider screens so it stays readable (#119)
+
+### Fixed
+
+- Clocks showed 12-hour time and numbers used US decimals when a Home Assistant profile was set to "Use system locale", because the add-on's browser always reports US English. They now follow the user's language (#122, #123)
+- Picking a device preset lost its PNG bit depth when the schedule was saved, so Kindles were sent images they can't show and stayed blank (#118)
+- Clearing a device preset kept the old device and its bit depth on the schedule (#124)
+
 ## [0.10.3] - 2026-08-31
 
 ### Fixed
@@ -411,4 +424,5 @@ Based on the [puppet](https://github.com/balloob/home-assistant-addons/tree/main
 [0.10.1]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.10.0...v0.10.1
 [0.10.2]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.10.1...v0.10.2
 [0.10.3]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.10.2...v0.10.3
+[0.11.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.10.3...v0.11.0
 [0.2.0]: https://github.com/usetrmnl/trmnl-home-assistant/compare/v0.1.0...v0.2.0
