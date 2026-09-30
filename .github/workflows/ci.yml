@@ -8,8 +8,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  CACHE_REPO: ${{ github.repository_owner }}/trmnl-ha-cache
-  TERMINUS_CACHE_REPO: ${{ github.repository_owner }}/trmnl-terminus-cache
 
 jobs:
   lint:
@@ -125,6 +123,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Lowercase the registry owner
+        id: registry
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -151,9 +153,9 @@ jobs:
           load: true
           tags: trmnl-ha:test-${{ matrix.tag }}
           cache-from: |
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.CACHE_REPO }}:${{ matrix.tag }}
+            type=registry,ref=${{ env.REGISTRY }}/${{ steps.registry.outputs.owner }}/trmnl-ha-cache:${{ matrix.tag }}
             type=gha,scope=build-${{ matrix.tag }}
-          cache-to: ${{ github.event_name == 'push' && format('type=registry,ref={0}/{1}:{2},mode=max', env.REGISTRY, env.CACHE_REPO, matrix.tag) || format('type=gha,mode=max,scope=build-{0}', matrix.tag) }}
+          cache-to: ${{ github.event_name == 'push' && format('type=registry,ref={0}/{1}/trmnl-ha-cache:{2},mode=max', env.REGISTRY, steps.registry.outputs.owner, matrix.tag) || format('type=gha,mode=max,scope=build-{0}', matrix.tag) }}
           provenance: false
 
       - name: Verify both runtimes are in the image
@@ -209,6 +211,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Lowercase the registry owner
+        id: registry
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
       # Rejects a non-compiling profile before it reaches a real install.
       - name: Load AppArmor profile
         id: apparmor
@@ -260,9 +266,9 @@ jobs:
           build-args: |
             BUILD_FROM=${{ steps.base.outputs.image }}
           cache-from: |
-            type=registry,ref=${{ env.REGISTRY }}/${{ env.TERMINUS_CACHE_REPO }}:${{ matrix.tag }}
+            type=registry,ref=${{ env.REGISTRY }}/${{ steps.registry.outputs.owner }}/trmnl-terminus-cache:${{ matrix.tag }}
             type=gha,scope=terminus-${{ matrix.tag }}
-          cache-to: ${{ github.event_name == 'push' && format('type=registry,ref={0}/{1}:{2},mode=max', env.REGISTRY, env.TERMINUS_CACHE_REPO, matrix.tag) || format('type=gha,mode=max,scope=terminus-{0}', matrix.tag) }}
+          cache-to: ${{ github.event_name == 'push' && format('type=registry,ref={0}/{1}/trmnl-terminus-cache:{2},mode=max', env.REGISTRY, steps.registry.outputs.owner, matrix.tag) || format('type=gha,mode=max,scope=terminus-{0}', matrix.tag) }}
           provenance: false
 
       # The boot test below starts the add-on with ha_ip alone, so nothing

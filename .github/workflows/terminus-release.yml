@@ -4,9 +4,13 @@ name: Terminus release
 # image:version from config.yaml, so merging a bump ships nothing on its own -
 # release.yml only builds once a terminus-v* release exists.
 #
-# Requires a RELEASE_PAT secret (repo scope). GitHub does not trigger workflows
-# from GITHUB_TOKEN-authored events, so a release created with the default token
-# would never start release.yml, and the bump would land having shipped nothing.
+# Upstream keeps a RELEASE_PAT secret (repo scope). A release created with that
+# token fires the release event, which starts release.yml.
+#
+# Forks do not inherit that secret. A release created with GITHUB_TOKEN does
+# not fire workflows, so this workflow then sends an addon-release dispatch,
+# which release.yml accepts and builds from. The dispatch is explicit, so it
+# cannot loop.
 
 on:
   push:
@@ -53,22 +57,14 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Failing loudly beats publishing a release that silently builds nothing.
-      - name: Require the release token
-        if: steps.existing.outputs.exists == 'false'
-        env:
-          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
-        run: |
-          if [ -z "${RELEASE_PAT:-}" ]; then
-            echo "::error::RELEASE_PAT is unset or empty. A release created with GITHUB_TOKEN will not trigger release.yml, so no images would be built."
-            exit 1
-          fi
-          echo "RELEASE_PAT in use - release.yml will run"
-
+      # RELEASE_PAT keeps the upstream path: the release event starts release.yml.
+      # Without it, publish with GITHUB_TOKEN and dispatch the build. Failing
+      # here used to strand forks, because they cannot see the upstream secret.
       - name: Publish the release
         if: steps.existing.outputs.exists == 'false'
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
@@ -86,9 +82,26 @@ jobs:
             printf 'Bundles Terminus %s; the add-on version mirrors the bundled server release.\n' "$VERSION" > /tmp/notes.md
           fi
 
-          gh release create "terminus-v${VERSION}" \
+          tag="terminus-v${VERSION}"
+
+          gh release create "$tag" \
             --target main \
             --title "$title" \
             --notes-file /tmp/notes.md
 
-          echo "Published terminus-v${VERSION} - release.yml will build and push the images"
+          if [ -n "${RELEASE_PAT:-}" ]; then
+            echo "Published ${tag} with RELEASE_PAT - release.yml runs from the release event"
+            exit 0
+          fi
+
+          # Roll the release back if the build cannot be started. Leaving the
+          # tag in place would make the next run treat it as already published.
+          echo "Published ${tag} with GITHUB_TOKEN - dispatching the image build"
+          if ! jq -n --arg tag "$tag" \
+            '{event_type:"addon-release", client_payload:{tag:$tag}}' \
+            | gh api --method POST "repos/${GITHUB_REPOSITORY}/dispatches" --input -; then
+            gh release delete "$tag" --cleanup-tag --yes || true
+            echo "::error::Image build was not started, so ${tag} was removed. release.yml would not have run."
+            exit 1
+          fi
+          echo "Dispatched release.yml for ${tag}"
