@@ -52,3 +52,8 @@ COPY --chown=www-data:www-data ha/ingress.js /var/www/html/public/larapaper-ha/
 RUN providers=/var/www/html/bootstrap/providers.php \
     && sed -i 's/^];$/    App\\Providers\\IngressServiceProvider::class,\n];/' "$providers" \
     && grep -q 'App\\Providers\\IngressServiceProvider::class' "$providers"
+
+# Home Assistant's add-on linter wants the native health check rather than a watchdog:
+# healthy once Laravel answers (LaraPaper's /up).
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+    CMD curl -fsS -o /dev/null http://localhost:8080/up || exit 1

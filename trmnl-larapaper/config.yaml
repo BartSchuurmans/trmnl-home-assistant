@@ -25,7 +25,6 @@ services:
 ingress: true
 panel_icon: mdi:tablet-dashboard
 panel_title: LaraPaper
-watchdog: http://[HOST]:[PORT:8080]/up
 # The TRMNL device API (and the web UI) on the home network
 ports:
   8080/tcp: 4567
