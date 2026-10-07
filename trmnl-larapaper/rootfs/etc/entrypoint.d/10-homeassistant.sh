@@ -160,23 +160,16 @@ fi
 
 # Home Assistant ingress (the sidebar panel and "Open Web UI"): Home Assistant proxies
 # /api/hassio_ingress/<token>/... to this port with the prefix removed and the prefix in
-# X-Ingress-Path. PHP is told the prefix is where index.php lives, so Laravel puts it in
-# front of every URL it makes (links, redirects, Livewire, assets), and the scheme and
-# host come from Home Assistant's X-Forwarded-* headers. Only the Supervisor may connect
-# (HA_INGRESS_PROXY is for CI).
+# X-Ingress-Path. LaraPaper follows a trusted proxy's X-Forwarded-Prefix (and its
+# X-Forwarded-Host and -Proto, which Home Assistant sends), so nginx passes the ingress
+# path on as that header and the Supervisor is a trusted proxy. Only the Supervisor may
+# connect (HA_INGRESS_PROXY is for CI).
 INGRESS_CONF=/etc/nginx/conf.d/ha-ingress.conf
 HA_INGRESS_PROXY="${HA_INGRESS_PROXY:-172.30.32.2}"
+set_env TRUSTED_PROXIES "$HA_INGRESS_PROXY"
 cat > "$INGRESS_CONF" <<CONF
 map \$http_x_ingress_path \$ha_ingress_path {
     "~^/api/hassio_ingress/[A-Za-z0-9_-]+\$" \$http_x_ingress_path;
-    default "";
-}
-map \$http_x_forwarded_host \$ha_ingress_host {
-    "" \$http_host;
-    default \$http_x_forwarded_host;
-}
-map \$http_x_forwarded_proto \$ha_ingress_https {
-    https on;
     default "";
 }
 
@@ -195,14 +188,6 @@ server {
     # The recipe preview writes root-relative asset paths into an iframe; ingress.js
     # puts the prefix in front of them.
     sub_filter '</head>' '<script src="\$ha_ingress_path/larapaper-ha/ingress.js"></script></head>';
-
-    # Home Assistant opens the add-on at the ingress path's root. Laravel's cached routes
-    # match a copy of the request with the trailing slash cut off, which loses the
-    # prefix there (REQUEST_URI no longer contains the script's directory), so "/"
-    # can't be routed: send it to the dashboard (the login page when logged out).
-    location = / {
-        return 302 \$ha_ingress_path/dashboard;
-    }
 
     location / {
         try_files \$uri \$uri/ /index.php?\$query_string;
@@ -223,11 +208,7 @@ server {
     location ~ \.php\$ {
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
-        fastcgi_param SCRIPT_NAME \$ha_ingress_path\$fastcgi_script_name;
-        fastcgi_param PHP_SELF \$ha_ingress_path\$fastcgi_script_name;
-        fastcgi_param REQUEST_URI \$ha_ingress_path\$request_uri;
-        fastcgi_param HTTP_HOST \$ha_ingress_host;
-        fastcgi_param HTTPS \$ha_ingress_https if_not_empty;
+        fastcgi_param HTTP_X_FORWARDED_PREFIX \$ha_ingress_path;
         fastcgi_pass 127.0.0.1:9000;
         fastcgi_buffers ${NGINX_FASTCGI_BUFFERS:-8 8k};
         fastcgi_buffer_size ${NGINX_FASTCGI_BUFFER_SIZE:-8k};

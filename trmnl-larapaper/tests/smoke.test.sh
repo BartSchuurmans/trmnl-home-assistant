@@ -121,8 +121,9 @@ code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 check "ingress: needs an ingress path" test "$(code http://127.0.0.1:8099/up)" = 400
 check "ingress: needs a valid ingress path" test "$(code -H 'X-Ingress-Path: /elsewhere' http://127.0.0.1:8099/up)" = 400
 check "ingress: answers with one" test "$(code -H 'X-Ingress-Path: /api/hassio_ingress/abc' http://127.0.0.1:8099/up)" = 200
-check "ingress: / goes to the dashboard under the prefix" sh -c \
-    "curl -s -o /dev/null -w '%{redirect_url}' -H 'X-Ingress-Path: /api/hassio_ingress/abc' http://127.0.0.1:8099/ | grep -q '/api/hassio_ingress/abc/dashboard'"
+check "ingress: answers at the prefix's root" test "$(code -H 'X-Ingress-Path: /api/hassio_ingress/abc' http://127.0.0.1:8099/)" = 200
+check "ingress: redirects stay under the prefix" sh -c \
+    "curl -s -o /dev/null -w '%{redirect_url}' -H 'X-Ingress-Path: /api/hassio_ingress/abc' http://127.0.0.1:8099/dashboard | grep -q '/api/hassio_ingress/abc/login'"
 check "ingress: links carry the prefix" sh -c \
     "curl -s -H 'X-Ingress-Path: /api/hassio_ingress/abc' http://127.0.0.1:8099/login | grep -q '/api/hassio_ingress/abc/'"
 check "ingress: loads ingress.js" sh -c \
