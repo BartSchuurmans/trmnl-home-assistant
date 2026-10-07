@@ -12,7 +12,5 @@ between upstream releases takes a `-1`, `-2` suffix.
 ### Added
 
 - LaraPaper 0.43.1 as a Home Assistant add-on, with the TRMNL framework 3.3.1 built in,
-  its data in `/data`, the web UI through ingress, a token-free Home Assistant proxy for
-  recipes, screens rendered ahead of time and each TRMNL as an MQTT device. Ported from
-  the LaraPaper (local) app in BartSchuurmans/trmnl-rolling-month-calendar, without its
-  calendar-recipe parts.
+  its data in `/data`, the web UI through ingress and a token-free Home Assistant proxy
+  for recipes.

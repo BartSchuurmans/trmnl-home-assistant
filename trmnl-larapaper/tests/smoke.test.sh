@@ -2,10 +2,10 @@
 # Boots the built add-on the way the Supervisor would (a /data with options.json, a
 # Supervisor token, the ingress proxy's address) and checks what it adds to LaraPaper:
 # the bundled framework, the options, the Home Assistant proxy at each access level,
-# ingress, the MQTT device sensors and that a restart keeps the app key.
+# ingress and that a restart keeps the app key.
 #
-# Needs Docker, curl and python3 on the host. A fake Home Assistant (fake-ha.py) and a
-# Mosquitto broker run next to it.
+# Needs Docker, curl and python3 on the host. A fake Home Assistant (fake-ha.py) runs
+# next to it.
 #
 # Usage: trmnl-larapaper/tests/smoke.test.sh [image]
 set -uo pipefail
@@ -15,13 +15,12 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK=$(mktemp -d)
 FAILED=0
 APP=larapaper-smoke
-MQTT=larapaper-smoke-mqtt
 HA_PORT=18123
 
 # shellcheck disable=SC2329 # run by the trap
 cleanup() {
     [ "$FAILED" = 0 ] || docker logs "$APP" 2>&1 | tail -80
-    docker rm -f "$APP" "$MQTT" >/dev/null 2>&1
+    docker rm -f "$APP" >/dev/null 2>&1
     [ -z "${HA_PID:-}" ] || kill "$HA_PID" 2>/dev/null
     rm -rf "$WORK"
 }
@@ -65,7 +64,6 @@ start() {
         docker run -d --name "$APP" -p 4567:8080 -p 127.0.0.1:8099:8099 -e TZ=Europe/Amsterdam \
             -e SUPERVISOR_TOKEN=smoke-supervisor-token \
             -e HA_API_URL="http://homeassistant:$HA_PORT/api" \
-            -e MQTT_HOST=homeassistant -e LARAPAPER_HA_MQTT_INTERVAL=2 \
             -e HA_INGRESS_PROXY=172.16.0.0/12 \
             --add-host homeassistant:host-gateway -v "$WORK/data:/data" "$IMAGE" >/dev/null
     fi
@@ -74,9 +72,8 @@ start() {
 
 mkdir -p "$WORK/data"
 python3 "$HERE/fake-ha.py" "$HA_PORT" & HA_PID=$!
-docker run -d --name "$MQTT" -p 1883:1883 eclipse-mosquitto:2 mosquitto -c /mosquitto-no-auth.conf >/dev/null
 
-start '{"app_url": "http://localhost:4567/", "registration_enabled": false, "home_assistant_access": "calendars", "prerender": true, "mqtt": true}'
+start '{"app_url": "http://localhost:4567/", "registration_enabled": false, "home_assistant_access": "calendars"}'
 ok "add-on became healthy"
 key="$(cat "$WORK/data/app_key")"
 
@@ -131,17 +128,8 @@ check "ingress: links carry the prefix" sh -c \
 check "ingress: loads ingress.js" sh -c \
     "curl -s -H 'X-Ingress-Path: /api/hassio_ingress/abc' http://127.0.0.1:8099/login | grep -q 'larapaper-ha/ingress.js'"
 
-# --- MQTT device sensors -----------------------------------------------------------
-status_topic=""
-for _ in $(seq 1 30); do
-    status_topic=$(docker exec "$MQTT" mosquitto_sub -t 'larapaper/+/status' -C 1 -W 2 -v 2>/dev/null)
-    [ -n "$status_topic" ] && break
-    sleep 1
-done
-check "mqtt: connects to the broker and reports online" grep -q ' online$' <<<"$status_topic"
-
 # --- Home Assistant proxy: read, then off ------------------------------------------
-start '{"app_url": "http://localhost:4567/", "registration_enabled": false, "home_assistant_access": "read", "prerender": true, "mqtt": false}'
+start '{"app_url": "http://localhost:4567/", "registration_enabled": false, "home_assistant_access": "read"}'
 states=$(body_in http://127.0.0.1:8124/api/states/sun.sun)
 check "read: forwards a state read with the Supervisor token" \
     grep -q '"method": "GET", "path": "/api/states/sun.sun", "auth": "Bearer smoke-supervisor-token"' <<<"$states"
@@ -152,7 +140,7 @@ expect_status "read: no POST to states" 403 POST http://127.0.0.1:8124/api/state
 expect_status "read: no services" 404 GET http://127.0.0.1:8124/api/services/light/turn_on
 expect_status "read: no config" 404 GET http://127.0.0.1:8124/api/config
 
-start '{"app_url": "http://localhost:4567/", "registration_enabled": false, "home_assistant_access": "off", "prerender": true, "mqtt": false}'
+start '{"app_url": "http://localhost:4567/", "registration_enabled": false, "home_assistant_access": "off"}'
 expect_status "off: no calendars" 000 GET http://127.0.0.1:8124/api/calendars
 
 # --- Restarts (above) keep the app key -----------------------------------------------

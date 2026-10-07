@@ -4,9 +4,8 @@
 
 This Home Assistant add-on runs [LaraPaper](https://github.com/usetrmnl/larapaper), a
 self-hosted TRMNL server (BYOS) with recipes, playlists and mashups. It bundles the TRMNL
-framework, lets recipes read Home Assistant without a token, renders screens ahead of
-time, shows each TRMNL in Home Assistant through MQTT and opens its web UI inside Home
-Assistant. The device API and web UI are on port `4567`.
+framework, lets recipes read Home Assistant without a token and opens its web UI inside
+Home Assistant. The device API and web UI are on port `4567`.
 
 [![Add repository to Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fusetrmnl%2Ftrmnl-home-assistant)
 

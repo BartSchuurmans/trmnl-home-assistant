@@ -54,8 +54,6 @@ set_env() {
 APP_URL="$(opt app_url)"
 APP_URL="${APP_URL%/}"
 REGISTRATION_ENABLED="$(opt registration_enabled)"
-PRERENDER="${LARAPAPER_HA_PRERENDER:-$(opt prerender)}"
-MQTT="${LARAPAPER_HA_MQTT:-$(opt mqtt)}"
 HA_ACCESS="$(opt home_assistant_access)"
 HA_ACCESS="${HA_ACCESS:-calendars}"
 
@@ -67,7 +65,7 @@ set_env APP_TIMEZONE "${TZ:-UTC}"
 set_env REGISTRATION_ENABLED "${REGISTRATION_ENABLED:-1}"
 [ -n "$APP_URL" ] && set_env APP_URL "$APP_URL"
 
-log "APP_URL=${APP_URL:-<unset>} TZ=${TZ:-UTC} registration=${REGISTRATION_ENABLED:-1} prerender=${PRERENDER:-1} mqtt=${MQTT:-1} home_assistant_access=$HA_ACCESS"
+log "APP_URL=${APP_URL:-<unset>} TZ=${TZ:-UTC} registration=${REGISTRATION_ENABLED:-1} home_assistant_access=$HA_ACCESS"
 
 # Home Assistant API without a user token: with homeassistant_api in config.yaml the
 # Supervisor gives the add-on its own token (SUPERVISOR_TOKEN). Recipes can't read
@@ -165,7 +163,7 @@ fi
 # X-Ingress-Path. PHP is told the prefix is where index.php lives, so Laravel puts it in
 # front of every URL it makes (links, redirects, Livewire, assets), and the scheme and
 # host come from Home Assistant's X-Forwarded-* headers. Only the Supervisor may connect
-# (HA_INGRESS_PROXY is for CI). LARAPAPER_INGRESS is for IngressServiceProvider.php.
+# (HA_INGRESS_PROXY is for CI).
 INGRESS_CONF=/etc/nginx/conf.d/ha-ingress.conf
 HA_INGRESS_PROXY="${HA_INGRESS_PROXY:-172.30.32.2}"
 cat > "$INGRESS_CONF" <<CONF
@@ -230,7 +228,6 @@ server {
         fastcgi_param REQUEST_URI \$ha_ingress_path\$request_uri;
         fastcgi_param HTTP_HOST \$ha_ingress_host;
         fastcgi_param HTTPS \$ha_ingress_https if_not_empty;
-        fastcgi_param LARAPAPER_INGRESS 1;
         fastcgi_pass 127.0.0.1:9000;
         fastcgi_buffers ${NGINX_FASTCGI_BUFFERS:-8 8k};
         fastcgi_buffer_size ${NGINX_FASTCGI_BUFFER_SIZE:-8k};

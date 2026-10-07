@@ -401,7 +401,7 @@ jobs:
           provenance: false
 
       # Boots the add-on with a fake Home Assistant and a Mosquitto broker and checks
-      # the bundled framework, options, Home Assistant proxy, ingress and MQTT.
+      # the bundled framework, options, Home Assistant proxy and ingress.
       # amd64 only - QEMU makes arm64 boot tests too slow here.
       - name: Smoke test add-on boot
         if: matrix.tag == 'amd64'

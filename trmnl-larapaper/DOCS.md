@@ -13,9 +13,6 @@ official LaraPaper image with these additions:
   updates and are part of Home Assistant backups.
 - **Recipes can read Home Assistant without a token** at `http://127.0.0.1:8124` (see
   [Home Assistant access](#home-assistant-access-for-recipes)).
-- **Screens are rendered ahead of time**, so the TRMNL never waits on a render.
-- **Each TRMNL shows up in Home Assistant** as a device with its battery, Wi-Fi signal,
-  firmware, last check-in and screen, through MQTT (see [Device sensors](#device-sensors)).
 - **The web UI opens inside Home Assistant** (ingress), wherever Home Assistant is
   reachable.
 
@@ -46,8 +43,6 @@ official LaraPaper image with these additions:
 | App URL | empty | The address in the screen links LaraPaper gives the TRMNL (`APP_URL`) |
 | Allow registration | on | Whether anyone reaching the web UI can create an account |
 | Home Assistant access for recipes | `calendars` | What `http://127.0.0.1:8124` lets recipes read, see below |
-| Render screens ahead of time | on | See [Rendering ahead of time](#rendering-ahead-of-time) |
-| Device sensors in Home Assistant | on | See [Device sensors](#device-sensors) |
 
 ## Home Assistant access for recipes
 
@@ -71,41 +66,6 @@ Recipes run in the add-on's own browser, so every recipe you install can read wh
 setting allows, whichever recipe you set it up for. Leave it at `calendars` unless a
 recipe needs more, and only install recipes you trust with `read`.
 
-## Rendering ahead of time
-
-LaraPaper renders a recipe only when the TRMNL asks for its screen and the recipe's data
-is older than its refresh interval. The TRMNL gives up after 15 seconds, which a render on
-a Home Assistant machine can take, and then shows an error. The add-on renders each
-polling recipe in a device's playlists shortly before its refresh interval runs out, so
-the TRMNL gets a ready screen. Mashups are still rendered when the TRMNL asks.
-
-## Device sensors
-
-With the **Mosquitto broker** add-on installed (and the MQTT integration set up, which
-Home Assistant offers once the broker runs), every TRMNL in LaraPaper appears under
-**Settings** → **Devices & services** → **MQTT** as its own device, named as in
-LaraPaper. Each one has:
-
-| Entity | What it shows |
-| --- | --- |
-| Battery | Charge in % (from the battery voltage the TRMNL reports) |
-| Charging, USB connected | On or off (newer firmware only) |
-| Firmware | The installed version, and an update when LaraPaper knows a newer one; **Install** has the TRMNL install it when it next wakes |
-| Wi-Fi signal | In dBm |
-| Last seen | When the TRMNL last asked for its screen |
-| Online | Off once it hasn't asked for twice its refresh interval plus 5 minutes (not while it sleeps) |
-| Screen | The screen the TRMNL was last given, as an image |
-| Sleep mode, Sleep from, Sleep until | Turn sleep mode on or off and set its times |
-| Refresh interval | How often the TRMNL wakes, in seconds |
-| Refresh screen | Fetches its recipes' data and renders them again now, for the TRMNL's next wake |
-| Battery voltage | Off by default |
-| Temperature, humidity, CO2, pressure | Only for a TRMNL with such a sensor attached |
-
-The values update within seconds of each check-in. Changes you make in Home Assistant
-reach the TRMNL the next time it wakes, as changes in LaraPaper do. A device you delete in
-LaraPaper is removed from Home Assistant too. The add-on finds the broker by itself;
-without one it checks again every few minutes.
-
 ## The web UI
 
 **Open Web UI** (and **Show in sidebar** on the add-on's page) shows LaraPaper inside
@@ -114,6 +74,11 @@ wherever Home Assistant does, for example through Home Assistant Cloud or your o
 access, so LaraPaper itself never has to be reachable from the internet. You still log in
 to LaraPaper there; passkeys you created at `http://<ha-ip>:4567` don't work under Home
 Assistant's address, a password does.
+
+Screen images in the web UI still link to the App URL
+([LaraPaper #289](https://github.com/usetrmnl/larapaper/issues/289)), so they only show
+where your browser can reach that address: at home, and not when Home Assistant itself is
+on https.
 
 At home, the web UI is also at the App URL (port 4567), next to the TRMNL's device API.
 

@@ -16,10 +16,6 @@ stage: experimental
 # The Supervisor token lets the Home Assistant proxy on 127.0.0.1:8124 read calendars
 # (and, with home_assistant_access: read, states and history) for recipes
 homeassistant_api: true
-# The Mosquitto broker's address and login, for the device sensors (mqtt.php); the
-# add-on also runs without a broker
-services:
-  - mqtt:want
 # The web UI through Home Assistant (sidebar, Open Web UI), also away from home;
 # ingress_port is left at its default, 8099
 ingress: true
@@ -34,11 +30,7 @@ options:
   app_url: ""
   registration_enabled: true
   home_assistant_access: calendars
-  prerender: true
-  mqtt: true
 schema:
   app_url: url
   registration_enabled: bool
   home_assistant_access: list(off|calendars|read)
-  prerender: bool
-  mqtt: bool

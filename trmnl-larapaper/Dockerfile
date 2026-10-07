@@ -1,6 +1,6 @@
 # LaraPaper for Home Assistant: the official LaraPaper image plus the TRMNL framework
 # (so screens render without fetching it from trmnl.com), Home Assistant's /data,
-# options and ingress, pre-rendering and MQTT device sensors.
+# options, ingress and a token-free proxy to Home Assistant's API for recipes.
 # The Supervisor (and CI) pass BUILD_FROM from build.yaml.
 ARG BUILD_FROM
 # hadolint ignore=DL3006
@@ -37,21 +37,10 @@ RUN view=/var/www/html/resources/views/vendor/trmnl/components/screen.blade.php 
     && ! grep -q 'fonts\.bunny\.net' "$view"
 
 COPY rootfs /
-RUN chmod +x /etc/entrypoint.d/10-homeassistant.sh \
-    /etc/s6-overlay/s6-rc.d/larapaper-ha-prerender/run \
-    /etc/s6-overlay/s6-rc.d/larapaper-ha-mqtt/run
+RUN chmod +x /etc/entrypoint.d/10-homeassistant.sh
 
-# Renders recipe screens ahead of time, so the TRMNL doesn't wait on a render, and
-# publishes the TRMNL devices to Home Assistant through MQTT discovery. Both run as s6
-# services next to LaraPaper's scheduler (rootfs/etc/s6-overlay).
-COPY ha/prerender.php ha/mqtt.php /opt/larapaper-ha/
-
-# Home Assistant ingress: see IngressServiceProvider.php and 10-homeassistant.sh
-COPY --chown=www-data:www-data ha/IngressServiceProvider.php /var/www/html/app/Providers/
+# Home Assistant ingress: see 10-homeassistant.sh
 COPY --chown=www-data:www-data ha/ingress.js /var/www/html/public/larapaper-ha/
-RUN providers=/var/www/html/bootstrap/providers.php \
-    && sed -i 's/^];$/    App\\Providers\\IngressServiceProvider::class,\n];/' "$providers" \
-    && grep -q 'App\\Providers\\IngressServiceProvider::class' "$providers"
 
 # Home Assistant's add-on linter wants the native health check rather than a watchdog:
 # healthy once Laravel answers (LaraPaper's /up).
