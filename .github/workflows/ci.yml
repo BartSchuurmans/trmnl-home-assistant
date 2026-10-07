@@ -335,3 +335,74 @@ jobs:
             exit 1
           fi
           echo "enforced: /config denied"
+
+  build-larapaper:
+    name: Build LaraPaper Add-on (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - platform: linux/amd64
+            tag: amd64
+            arch: amd64
+          - platform: linux/arm64
+            tag: arm64
+            arch: aarch64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint the add-on config
+        if: matrix.tag == 'amd64'
+        uses: frenck/action-addon-linter@v2
+        with:
+          path: ./trmnl-larapaper
+
+      - name: Lowercase the registry owner
+        id: registry
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The Supervisor supplies BUILD_FROM from build.yaml; plain buildx does not.
+      - name: Resolve LaraPaper base image
+        id: base
+        working-directory: trmnl-larapaper
+        run: echo "image=$(grep "^  ${{ matrix.arch }}:" build.yaml | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Build add-on image
+        uses: docker/build-push-action@v5
+        with:
+          context: trmnl-larapaper
+          platforms: ${{ matrix.platform }}
+          push: false
+          load: true
+          tags: trmnl-larapaper:test-${{ matrix.tag }}
+          build-args: |
+            BUILD_FROM=${{ steps.base.outputs.image }}
+          cache-from: |
+            type=registry,ref=${{ env.REGISTRY }}/${{ steps.registry.outputs.owner }}/trmnl-larapaper-cache:${{ matrix.tag }}
+            type=gha,scope=larapaper-${{ matrix.tag }}
+          cache-to: ${{ github.event_name == 'push' && format('type=registry,ref={0}/{1}/trmnl-larapaper-cache:{2},mode=max', env.REGISTRY, steps.registry.outputs.owner, matrix.tag) || format('type=gha,mode=max,scope=larapaper-{0}', matrix.tag) }}
+          provenance: false
+
+      # Boots the add-on with a fake Home Assistant and a Mosquitto broker and checks
+      # the bundled framework, options, Home Assistant proxy, ingress and MQTT.
+      # amd64 only - QEMU makes arm64 boot tests too slow here.
+      - name: Smoke test add-on boot
+        if: matrix.tag == 'amd64'
+        run: trmnl-larapaper/tests/smoke.test.sh trmnl-larapaper:test-amd64
