@@ -1,0 +1,219 @@
+#!/bin/sh
+# Home Assistant glue for LaraPaper. serversideup-php runs /etc/entrypoint.d/* in
+# order on every start, before 50-laravel-automations.sh (migrations, config cache),
+# so what this writes to .env is live on each boot.
+set -e
+
+APP_DIR="${APP_DIR:-/var/www/html}"
+DATA_DIR="${DATA_DIR:-/data}"
+
+log() { echo "[larapaper-ha] $1"; }
+
+# Keep the database and generated screens in /data, which survives add-on updates and
+# is included in Home Assistant backups (same paths as upstream docker-compose).
+persist() {
+    image_path="$APP_DIR/$1"
+    data_path="$DATA_DIR/$2"
+    mkdir -p "$data_path"
+    if [ ! -L "$image_path" ]; then
+        if [ -d "$image_path" ]; then
+            cp -a "$image_path/." "$data_path/" 2>/dev/null || true
+            rm -rf "$image_path"
+        fi
+        mkdir -p "$(dirname "$image_path")"
+        ln -s "$data_path" "$image_path"
+    fi
+}
+persist database/storage database
+persist storage/app/public/images/generated generated
+[ -f "$DATA_DIR/database/database.sqlite" ] || touch "$DATA_DIR/database/database.sqlite"
+chown -R www-data:www-data "$DATA_DIR/database" "$DATA_DIR/generated" 2>/dev/null || true
+
+# APP_KEY is generated once: rotating it would invalidate encrypted settings.
+if [ ! -s "$DATA_DIR/app_key" ]; then
+    echo "base64:$(head -c 32 /dev/urandom | base64 | tr -d '\n')" > "$DATA_DIR/app_key"
+    log "generated APP_KEY"
+fi
+
+# Add-on options (/data/options.json); PHP is in the image, jq/bashio are not.
+opt() {
+    # shellcheck disable=SC2016 # PHP code, not shell expansions
+    php -r '$o = json_decode(@file_get_contents($argv[1]), true) ?: [];
+            $v = $o[$argv[2]] ?? "";
+            echo is_bool($v) ? ($v ? "1" : "0") : $v;' "$DATA_DIR/options.json" "$1"
+}
+
+set_env() {
+    tmp="$APP_DIR/.env.tmp"
+    grep -v "^$1=" "$APP_DIR/.env" > "$tmp" || true
+    printf '%s=%s\n' "$1" "$2" >> "$tmp"
+    cat "$tmp" > "$APP_DIR/.env"
+    rm -f "$tmp"
+}
+
+APP_URL="$(opt app_url)"
+APP_URL="${APP_URL%/}"
+REGISTRATION_ENABLED="$(opt registration_enabled)"
+HA_ACCESS="$(opt home_assistant_access)"
+HA_ACCESS="${HA_ACCESS:-calendars}"
+
+set_env APP_KEY "$(cat "$DATA_DIR/app_key")"
+set_env APP_ENV production
+set_env APP_DEBUG false
+set_env DB_DATABASE database/storage/database.sqlite
+set_env APP_TIMEZONE "${TZ:-UTC}"
+set_env REGISTRATION_ENABLED "${REGISTRATION_ENABLED:-1}"
+[ -n "$APP_URL" ] && set_env APP_URL "$APP_URL"
+
+log "APP_URL=${APP_URL:-<unset>} TZ=${TZ:-UTC} registration=${REGISTRATION_ENABLED:-1} home_assistant_access=$HA_ACCESS"
+
+# Home Assistant API without a user token: with homeassistant_api in config.yaml the
+# Supervisor gives the add-on its own token (SUPERVISOR_TOKEN). Recipes can't read
+# environment variables, so nginx serves part of Home Assistant's REST API on
+# 127.0.0.1:8124 and adds the token there, only to requests from inside this container
+# and only GET. The home_assistant_access option picks how much:
+#   off        nothing (recipes use a URL and a long-lived token of their own)
+#   calendars  /api/calendars/ and daily forecasts (/api/weather/<entity>), the default
+#   read       also /api/states and /api/history/period
+# Recipe markup runs in the renderer's Chromium in this container, so whatever is
+# reachable here is readable by every installed recipe. HA_API_URL is for CI's fake HA.
+HA_PROXY_CONF=/etc/nginx/conf.d/ha-api.conf
+HA_API_URL="${HA_API_URL:-http://supervisor/core/api}"
+# nginx won't start if the upstream name doesn't resolve
+# shellcheck disable=SC2016 # PHP code, not shell expansions
+ha_api_host="$(php -r '$h = parse_url($argv[1], PHP_URL_HOST);
+                       echo gethostbyname($h) === $h ? "" : $h;' "$HA_API_URL")"
+# Forecasts are a service call (POST weather.get_forecasts), but a recipe can only
+# poll with GET: the weather location turns a GET for one entity into that one call.
+# proxy_pass can't take a path there (the URI is rewritten), so split the URL.
+# shellcheck disable=SC2016 # PHP code, not shell expansions
+ha_api_origin="$(php -r '$u = parse_url($argv[1]);
+                         echo $u["scheme"] . "://" . $u["host"] . (isset($u["port"]) ? ":" . $u["port"] : "");' "$HA_API_URL")"
+# shellcheck disable=SC2016
+ha_api_path="$(php -r 'echo rtrim(parse_url($argv[1], PHP_URL_PATH) ?? "", "/");' "$HA_API_URL")"
+
+# One read-only location per API path: GET only, the token added on the way out
+ha_get() {
+    cat <<LOCATION
+    location $1 {
+        limit_except GET { deny all; }
+        proxy_pass ${HA_API_URL}$2;
+        proxy_set_header Authorization "Bearer ${SUPERVISOR_TOKEN}";
+    }
+LOCATION
+}
+
+rm -f "$HA_PROXY_CONF"
+case "$HA_ACCESS" in
+    off|calendars|read) ;;
+    *) log "unknown home_assistant_access '$HA_ACCESS', using calendars"; HA_ACCESS=calendars ;;
+esac
+if [ "$HA_ACCESS" = off ]; then
+    log "Home Assistant proxy off (home_assistant_access: off)"
+elif [ -z "$SUPERVISOR_TOKEN" ]; then
+    log "no SUPERVISOR_TOKEN: Home Assistant proxy off, recipes need an access token"
+elif [ -z "$ha_api_host" ]; then
+    log "can't resolve $HA_API_URL: Home Assistant proxy off, recipes need an access token"
+else
+    {
+        cat <<CONF
+# /api/weather/<weather entity> → the entity id, or empty for anything else
+map \$uri \$ha_weather_entity {
+    "~^/api/weather/(?<entity>weather\\.[a-z0-9_]+)\$" \$entity;
+    default "";
+}
+
+server {
+    listen 127.0.0.1:8124;
+    access_log off;
+
+CONF
+        ha_get "= /api/calendars" /calendars
+        ha_get /api/calendars/ /calendars/
+        if [ "$HA_ACCESS" = read ]; then
+            ha_get "= /api/states" /states
+            ha_get /api/states/ /states/
+            ha_get /api/history/period /history/period
+        fi
+        cat <<CONF
+    location /api/weather/ {
+        limit_except GET { deny all; }
+        if (\$ha_weather_entity = "") { return 404; }
+        # (the trailing ? drops the request's own query string)
+        rewrite ^ ${ha_api_path}/services/weather/get_forecasts?return_response? break;
+        proxy_method POST;
+        proxy_set_header Content-Type application/json;
+        proxy_set_body '{"entity_id": "\$ha_weather_entity", "type": "daily"}';
+        proxy_pass ${ha_api_origin};
+        proxy_set_header Authorization "Bearer ${SUPERVISOR_TOKEN}";
+    }
+
+    location / {
+        return 404;
+    }
+}
+CONF
+    } > "$HA_PROXY_CONF"
+    chmod 600 "$HA_PROXY_CONF"
+    log "Home Assistant proxy ($HA_ACCESS) on http://127.0.0.1:8124 → $HA_API_URL"
+fi
+
+# Home Assistant ingress (the sidebar panel and "Open Web UI"): Home Assistant proxies
+# /api/hassio_ingress/<token>/... to this port with the prefix removed and the prefix in
+# X-Ingress-Path. LaraPaper follows a trusted proxy's X-Forwarded-Prefix (and its
+# X-Forwarded-Host and -Proto, which Home Assistant sends), so nginx passes the ingress
+# path on as that header and the Supervisor is a trusted proxy. Only the Supervisor may
+# connect (HA_INGRESS_PROXY is for CI).
+INGRESS_CONF=/etc/nginx/conf.d/ha-ingress.conf
+HA_INGRESS_PROXY="${HA_INGRESS_PROXY:-172.30.32.2}"
+set_env TRUSTED_PROXIES "$HA_INGRESS_PROXY"
+cat > "$INGRESS_CONF" <<CONF
+map \$http_x_ingress_path \$ha_ingress_path {
+    "~^/api/hassio_ingress/[A-Za-z0-9_-]+\$" \$http_x_ingress_path;
+    default "";
+}
+
+server {
+    listen 8099;
+    allow ${HA_INGRESS_PROXY};
+    deny all;
+
+    root /var/www/html/public;
+    index index.php;
+    charset utf-8;
+    absolute_redirect off;
+
+    if (\$ha_ingress_path = "") { return 400; }
+
+    # The recipe preview writes root-relative asset paths into an iframe; ingress.js
+    # puts the prefix in front of them.
+    sub_filter '</head>' '<script src="\$ha_ingress_path/larapaper-ha/ingress.js"></script></head>';
+
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    # The framework's stylesheet loads its fonts from /fonts/...
+    location ^~ /trmnl-framework/ {
+        sub_filter_types text/css;
+        sub_filter_once off;
+        sub_filter 'url("/fonts/' 'url("\$ha_ingress_path/fonts/';
+        try_files \$uri =404;
+    }
+
+    location ~ /\.(?!well-known) {
+        deny all;
+    }
+
+    location ~ \.php\$ {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        fastcgi_param HTTP_X_FORWARDED_PREFIX \$ha_ingress_path;
+        fastcgi_pass 127.0.0.1:9000;
+        fastcgi_buffers ${NGINX_FASTCGI_BUFFERS:-8 8k};
+        fastcgi_buffer_size ${NGINX_FASTCGI_BUFFER_SIZE:-8k};
+        fastcgi_read_timeout ${PHP_MAX_EXECUTION_TIME:-99};
+    }
+}
+CONF
+log "Home Assistant ingress on port 8099 (from $HA_INGRESS_PROXY)"
