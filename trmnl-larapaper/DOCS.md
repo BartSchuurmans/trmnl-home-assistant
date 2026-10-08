@@ -7,8 +7,7 @@ server (BYOS) with recipes, playlists and mashups, inside Home Assistant. It is 
 official LaraPaper image with these additions:
 
 - The **TRMNL framework 3.3.1** (CSS, JS and fonts) is built into the add-on, so screens
-  render without fetching it from trmnl.com. The Inter stylesheet from fonts.bunny.net
-  is removed; the framework ships Inter itself.
+  render without fetching it from trmnl.com.
 - The database, generated screens and app key are kept in `/data`, so they survive
   updates and are part of Home Assistant backups.
 - **Recipes can read Home Assistant without a token** at `http://127.0.0.1:8124` (see
@@ -100,5 +99,5 @@ on `127.0.0.1:8124` is only reachable from inside the add-on.
 
 ## Updating
 
-The add-on's version is the LaraPaper release it runs (`0.43.1` runs LaraPaper 0.43.1).
+The add-on's version is the LaraPaper release it runs (`0.44.0` runs LaraPaper 0.44.0).
 A fix to the add-on alone between LaraPaper releases adds `-1`, `-2`.

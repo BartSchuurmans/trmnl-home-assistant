@@ -26,15 +26,12 @@ RUN for dir in trmnl-framework fonts; do \
         ln -sfn "/opt/larapaper-ha-assets/$dir" "/var/www/html/public/$dir"; \
     done
 
-# Point LaraPaper at the bundled framework instead of trmnl.com, and drop the Inter
-# stylesheet from fonts.bunny.net (the framework ships Inter itself). OPcache on, as in
-# LaraPaper's own docker-compose.
+# Point LaraPaper at the bundled framework instead of trmnl.com (the explicit URLs win
+# over TRMNL_BLADE_FRAMEWORK_BASE_URL and the recipe's framework_version). OPcache on, as
+# in LaraPaper's own docker-compose.
 ENV TRMNL_BLADE_FRAMEWORK_CSS_URL=/trmnl-framework/3.3.1/plugins.min.css \
     TRMNL_BLADE_FRAMEWORK_JS_URL=/trmnl-framework/3.3.1/plugins.min.js \
     PHP_OPCACHE_ENABLE=1
-RUN view=/var/www/html/resources/views/vendor/trmnl/components/screen.blade.php \
-    && sed -i '/fonts\.bunny\.net/d' "$view" \
-    && ! grep -q 'fonts\.bunny\.net' "$view"
 
 COPY rootfs /
 RUN chmod +x /etc/entrypoint.d/10-homeassistant.sh
