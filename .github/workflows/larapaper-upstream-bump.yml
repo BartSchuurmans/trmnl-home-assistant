@@ -71,14 +71,24 @@ jobs:
           done
           echo "$ref published for amd64 and arm64"
 
+      # The CHANGELOG entry carries LaraPaper's own release notes, then the add-on's
+      # changes; Home Assistant's update dialog and the GitHub release both show it.
       - name: Apply the bump
         if: steps.upstream.outputs.changed == 'true'
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LATEST: ${{ steps.upstream.outputs.latest }}
         run: |
           set -euo pipefail
           sed -i "s|ghcr.io/usetrmnl/larapaper:.*|ghcr.io/usetrmnl/larapaper:${LATEST}|" trmnl-larapaper/build.yaml
           sed -i "s|^version: .*|version: \"${LATEST}\"|" trmnl-larapaper/config.yaml
+
+          # A tag can come before its release notes; link the release then.
+          if ! sh scripts/larapaper-release-notes.sh "$LATEST" > /tmp/larapaper-notes.md; then
+            echo "::warning::LaraPaper ${LATEST} has no release notes yet; the entry links the release instead"
+            printf '### LaraPaper %s\n\nSee the [LaraPaper %s release](https://github.com/usetrmnl/larapaper/releases/tag/%s).\n' \
+              "$LATEST" "$LATEST" "$LATEST" > /tmp/larapaper-notes.md
+          fi
 
           python3 - <<'PY'
           import datetime, io, os
@@ -86,8 +96,10 @@ jobs:
           today = datetime.date.today().isoformat()
           path = "trmnl-larapaper/CHANGELOG.md"
           text = io.open(path, encoding="utf-8").read()
+          notes = io.open("/tmp/larapaper-notes.md", encoding="utf-8").read().strip()
           anchor = "\n## ["
-          entry = (f"\n## [{version}] - {today}\n\n### Changed\n\n"
+          entry = (f"\n## [{version}] - {today}\n\n{notes}\n\n"
+                   f"### Home Assistant add-on\n\n"
                    f"- Updated LaraPaper to {version}\n")
           io.open(path, "w", encoding="utf-8").write(
               text.replace(anchor, entry + anchor, 1))
@@ -135,7 +147,7 @@ jobs:
             printf 'Upstream tagged `%s`; the add-on pinned `%s`.\n\n' "$LATEST" "$CURRENT"
             printf -- '- bumps the base image in `build.yaml` for both architectures\n'
             printf -- '- bumps `config.yaml` to `%s`, which the add-on version mirrors\n' "$LATEST"
-            printf -- '- adds a CHANGELOG entry\n\n'
+            printf -- '- adds a CHANGELOG entry with LaraPaper'"'"'s release notes\n\n'
             printf 'Upstream changes: https://github.com/usetrmnl/larapaper/compare/%s...%s\n\n' "$CURRENT" "$LATEST"
             printf 'Publishing needs a `larapaper-v%s` release once this merges - the Supervisor pulls `image:version` from `config.yaml`, so merging alone ships nothing.\n' "$LATEST"
           } > /tmp/pr-body.md

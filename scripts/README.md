@@ -28,6 +28,13 @@ The same as trmnl-terminus for the bundled LaraPaper release: the
 `larapaper-upstream-bump` workflow writes the version, and the script publishes it,
 tagged `larapaper-v<version>`.
 
+## larapaper-release-notes.sh
+
+Prints a LaraPaper release's notes as the `### LaraPaper <version>` section of a
+`trmnl-larapaper/CHANGELOG.md` entry; the add-on's own changes follow under
+`### Home Assistant add-on`. The `larapaper-upstream-bump` workflow writes it into the
+bump's entry, and CI checks both headings.
+
 ### Usage
 
 From the project root:

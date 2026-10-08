@@ -7,9 +7,16 @@ The version mirrors the [LaraPaper](https://github.com/usetrmnl/larapaper) relea
 the add-on bundles, so add-on 0.44.0 ships LaraPaper 0.44.0. A wrapper-only fix
 between upstream releases takes a `-1`, `-2` suffix.
 
+Each entry starts with the bundled LaraPaper release's own notes (on the version that
+first bundles it), followed by the add-on's own changes under "Home Assistant add-on".
+
 ## [0.44.0] - 2026-10-08
 
-### Added
+### LaraPaper 0.44.0
+
+PLACEHOLDER
+
+### Home Assistant add-on
 
 - LaraPaper 0.44.0 as a Home Assistant add-on, with the TRMNL framework 3.3.1 built in,
   its data in `/data`, the web UI through ingress and a token-free Home Assistant proxy

@@ -361,6 +361,34 @@ jobs:
         with:
           path: ./trmnl-larapaper
 
+      # The entry Home Assistant's update dialog and the GitHub release show: LaraPaper's
+      # notes when this version first bundles a release, then the add-on's own changes.
+      - name: Check the CHANGELOG entry
+        if: matrix.tag == 'amd64'
+        run: |
+          set -euo pipefail
+          version=$(grep '^version:' trmnl-larapaper/config.yaml | awk '{print $2}' | tr -d '"')
+          entry=$(awk -v v="$version" '
+            index($0, "## [" v "]") == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' trmnl-larapaper/CHANGELOG.md)
+          if [ -z "$entry" ]; then
+            echo "::error file=trmnl-larapaper/CHANGELOG.md::no [${version}] entry"
+            exit 1
+          fi
+          status=0
+          if ! printf '%s\n' "$entry" | grep -qxF '### Home Assistant add-on'; then
+            echo "::error file=trmnl-larapaper/CHANGELOG.md::the [${version}] entry has no \"### Home Assistant add-on\" section"
+            status=1
+          fi
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+             && ! printf '%s\n' "$entry" | grep -qxF "### LaraPaper ${version}"; then
+            echo "::error file=trmnl-larapaper/CHANGELOG.md::the [${version}] entry has no \"### LaraPaper ${version}\" section; generate it with: sh scripts/larapaper-release-notes.sh ${version}"
+            status=1
+          fi
+          exit "$status"
+
       - name: Lowercase the registry owner
         id: registry
         run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
