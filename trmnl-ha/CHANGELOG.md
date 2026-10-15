@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1] - 2026-10-16
+
+### Fixed
+
+- The add-on logged the full webhook URL on every send. A TRMNL webhook URL carries the plugin's write credential, so anyone shown the logs could push images to that plugin. The URL is now left out of logs and error messages (#130)
+
 ## [0.11.0] - 2026-09-28
 
 ### Added
