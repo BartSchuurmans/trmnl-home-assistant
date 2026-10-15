@@ -54,6 +54,6 @@ Thank you for your support: Johan, 16tools.com and jfkmdd
 
 ### Home Assistant add-on
 
-- LaraPaper 0.44.0 as a Home Assistant add-on, with the TRMNL framework 3.3.1 built in,
+- LaraPaper 0.44.0 as a Home Assistant add-on, with the TRMNL framework 3.4.0 built in,
   its data in `/data`, the web UI through ingress and a token-free Home Assistant proxy
-  for recipes.
+  for recipes, confined by an AppArmor profile.

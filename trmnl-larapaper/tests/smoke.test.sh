@@ -8,6 +8,7 @@
 # next to it.
 #
 # Usage: trmnl-larapaper/tests/smoke.test.sh [image]
+# Extra docker run arguments (e.g. an AppArmor profile) go in SMOKE_DOCKER_ARGS.
 set -uo pipefail
 
 IMAGE="${1:-trmnl-larapaper:dev}"
@@ -61,11 +62,12 @@ start() {
     if docker inspect "$APP" >/dev/null 2>&1; then
         docker restart "$APP" >/dev/null
     else
+        # shellcheck disable=SC2086 # SMOKE_DOCKER_ARGS holds several arguments
         docker run -d --name "$APP" -p 4567:8080 -p 127.0.0.1:8099:8099 -e TZ=Europe/Amsterdam \
             -e SUPERVISOR_TOKEN=smoke-supervisor-token \
             -e HA_API_URL="http://homeassistant:$HA_PORT/api" \
             -e HA_INGRESS_PROXY=172.16.0.0/12 \
-            --add-host homeassistant:host-gateway -v "$WORK/data:/data" "$IMAGE" >/dev/null
+            --add-host homeassistant:host-gateway -v "$WORK/data:/data" ${SMOKE_DOCKER_ARGS:-} "$IMAGE" >/dev/null
     fi
     wait_up || { fail "add-on became healthy"; exit 1; }
 }
@@ -78,16 +80,25 @@ ok "add-on became healthy"
 key="$(cat "$WORK/data/app_key")"
 
 # --- Bundled framework -------------------------------------------------------------
-for path in /trmnl-framework/3.3.1/plugins.min.css /trmnl-framework/3.3.1/plugins.min.js \
+for path in /trmnl-framework/3.4.0/plugins.min.css /trmnl-framework/3.4.0/plugins.min.js \
             /fonts/Inter.ttf /fonts/TRMNL16-Regular.woff2; do
     check "serves $path" curl -fsS -o /dev/null "http://localhost:4567$path"
 done
 # Screens render from a file:// page, so the files must also be at the filesystem root
-check "framework at the filesystem root" docker exec "$APP" sh -c 'test -s /trmnl-framework/3.3.1/plugins.min.css && test -s /fonts/Inter.ttf'
+check "framework at the filesystem root" docker exec "$APP" sh -c 'test -s /trmnl-framework/3.4.0/plugins.min.css && test -s /fonts/Inter.ttf'
 # shellcheck disable=SC2016 # expands in the container
-check "license texts next to the files" docker exec "$APP" sh -c 'for f in /trmnl-framework/3.3.1/LICENSE /fonts/OFL-trmnl.txt /fonts/OFL-classic.txt /fonts/CC-BY-3.0.txt; do test -s "$f" || exit 1; done'
+check "license texts next to the files" docker exec "$APP" sh -c 'for f in /trmnl-framework/3.4.0/LICENSE /fonts/OFL-trmnl.txt /fonts/OFL-classic.txt /fonts/CC-BY-3.0.txt; do test -s "$f" || exit 1; done'
 check "no fonts.bunny.net in screens" docker exec "$APP" sh -c '! grep -q fonts.bunny.net /var/www/html/resources/views/vendor/trmnl/components/screen.blade.php'
-check "LaraPaper uses the bundled framework" docker exec "$APP" sh -c 'printenv TRMNL_BLADE_FRAMEWORK_CSS_URL | grep -qx /trmnl-framework/3.3.1/plugins.min.css'
+check "LaraPaper uses the bundled framework" docker exec "$APP" sh -c 'printenv TRMNL_BLADE_FRAMEWORK_CSS_URL | grep -qx /trmnl-framework/3.4.0/plugins.min.css'
+# A screen rendered the way recipes are (Chromium through Browsershot, then ImageMagick),
+# so a confined add-on (SMOKE_DOCKER_ARGS) is shown to render too
+# shellcheck disable=SC2016 # PHP code
+png=$(docker exec -u www-data "$APP" php artisan tinker --execute '
+    $markup = Illuminate\Support\Facades\Blade::render("<x-trmnl::screen>".view("trmnl")->render()."</x-trmnl::screen>");
+    $model = App\Models\DeviceModel::where("name", "og_png")->firstOrFail();
+    $id = App\Services\ImageGenerationService::generateImageFromModel($markup, $model);
+    echo "png=", Illuminate\Support\Facades\Storage::disk("public")->path("images/generated/$id.png");' 2>&1 | sed -n 's/^png=//p')
+check "renders a screen" docker exec "$APP" test -s "${png:-/missing}"
 
 # --- Options and /data -------------------------------------------------------------
 check "App URL from the options" docker exec "$APP" grep -qx 'APP_URL=http://localhost:4567' /var/www/html/.env

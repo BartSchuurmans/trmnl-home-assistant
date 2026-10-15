@@ -6,7 +6,7 @@ This add-on runs [LaraPaper](https://github.com/usetrmnl/larapaper), a self-host
 server (BYOS) with recipes, playlists and mashups, inside Home Assistant. It is the
 official LaraPaper image with these additions:
 
-- The **TRMNL framework 3.3.1** (CSS, JS and fonts) is built into the add-on, so screens
+- The **TRMNL framework 3.4.0** (CSS, JS and fonts) is built into the add-on, so screens
   render without fetching it from trmnl.com.
 - The database, generated screens and app key are kept in `/data`, so they survive
   updates and are part of Home Assistant backups.
@@ -88,7 +88,7 @@ reach the internet: a daily firmware check, a weekly device-model list update an
 update check in the web UI. They fail harmlessly when there's no connection. Recipes
 that load their own scripts, fonts or images from the internet (charts, maps, a
 calendar library) still need it, and so does a recipe that asks for a framework version
-other than 3.3.1.
+other than 3.4.0.
 
 ## Security
 
@@ -96,6 +96,12 @@ This add-on is meant for trusted home networks. Port 4567 serves the TRMNL devic
 and the web UI; don't expose it to the internet (use **Open Web UI** from outside).
 Ingress on port 8099 only answers Home Assistant's own proxy. The Home Assistant proxy
 on `127.0.0.1:8124` is only reachable from inside the add-on.
+
+The container itself is confined by an AppArmor profile (`apparmor.txt`): it is denied
+access to Home Assistant's `/config`, `/ssl`, `/backup`, `/share` and `/media`
+directories, to other add-ons, and to raw sockets. To check for denials after a deploy,
+SSH into Home Assistant and run
+`journalctl _TRANSPORT="audit" | grep 'apparmor="DENIED"' | grep trmnl-larapaper`.
 
 ## Updating
 

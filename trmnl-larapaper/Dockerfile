@@ -11,7 +11,7 @@ FROM ${BUILD_FROM}
 # hadolint ignore=DL3002
 USER root
 
-# TRMNL framework 3.3.1 (LaraPaper's default version) with its fonts, each file pinned
+# TRMNL framework 3.4.0 (LaraPaper's default version) with its fonts, each file pinned
 # by SHA-256 in assets.txt. Recipe markup can't inline it: Browsershot rejects pages
 # containing "file:" and similar strings, so it is served from root-relative paths.
 COPY assets.txt fetch-assets.sh /tmp/larapaper-ha/
@@ -29,8 +29,8 @@ RUN for dir in trmnl-framework fonts; do \
 # Point LaraPaper at the bundled framework instead of trmnl.com (the explicit URLs win
 # over TRMNL_BLADE_FRAMEWORK_BASE_URL and the recipe's framework_version). OPcache on, as
 # in LaraPaper's own docker-compose.
-ENV TRMNL_BLADE_FRAMEWORK_CSS_URL=/trmnl-framework/3.3.1/plugins.min.css \
-    TRMNL_BLADE_FRAMEWORK_JS_URL=/trmnl-framework/3.3.1/plugins.min.js \
+ENV TRMNL_BLADE_FRAMEWORK_CSS_URL=/trmnl-framework/3.4.0/plugins.min.css \
+    TRMNL_BLADE_FRAMEWORK_JS_URL=/trmnl-framework/3.4.0/plugins.min.js \
     PHP_OPCACHE_ENABLE=1
 
 COPY rootfs /
