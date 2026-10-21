@@ -105,5 +105,5 @@ SSH into Home Assistant and run
 
 ## Updating
 
-The add-on's version is the LaraPaper release it runs (`0.44.0` runs LaraPaper 0.44.0).
+The add-on's version is the LaraPaper release it runs (`0.45.1` runs LaraPaper 0.45.1).
 A fix to the add-on alone between LaraPaper releases adds `-1`, `-2`.
