@@ -74,6 +74,18 @@ log "APP_URL=${APP_URL:-<unset>} TZ=${TZ:-UTC} registration=${REGISTRATION_ENABL
 INGRESS_CONF=/etc/nginx/conf.d/ha-ingress.conf
 HA_INGRESS_PROXY="${HA_INGRESS_PROXY:-172.30.32.2}"
 set_env TRUSTED_PROXIES "$HA_INGRESS_PROXY"
+# Screen images link to APP_URL/storage/... (the address the TRMNL uses, LaraPaper #289),
+# which a browser away from home, or on an https Home Assistant, can't load. Through
+# ingress those links point at the ingress path instead, in pages and in Livewire's JSON
+# (where slashes are escaped). nginx's quoted strings take \\ for one backslash.
+storage_filter=""
+if [ -n "$APP_URL" ]; then
+    app_url_json="$(printf '%s' "$APP_URL" | sed 's#/#\\\\/#g')"
+    storage_filter="sub_filter_types application/json;
+        sub_filter_once off;
+        sub_filter '$APP_URL/storage/' '\$ha_ingress_path/storage/';
+        sub_filter '$app_url_json\\\\/storage\\\\/' '\$ha_ingress_path/storage/';"
+fi
 cat > "$INGRESS_CONF" <<CONF
 map \$http_x_ingress_path \$ha_ingress_path {
     "~^/api/hassio_ingress/[A-Za-z0-9_-]+\$" \$http_x_ingress_path;
@@ -104,6 +116,7 @@ server {
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
         fastcgi_param HTTP_X_FORWARDED_PREFIX \$ha_ingress_path;
+        ${storage_filter}
         fastcgi_pass 127.0.0.1:9000;
         fastcgi_buffers ${NGINX_FASTCGI_BUFFERS:-8 8k};
         fastcgi_buffer_size ${NGINX_FASTCGI_BUFFER_SIZE:-8k};

@@ -38,4 +38,4 @@ From the [LaraPaper 0.45.0 release](https://github.com/usetrmnl/larapaper/releas
 ### Home Assistant add-on
 
 - LaraPaper 0.45.1 as a Home Assistant add-on: its data in `/data`, the web UI
-  through ingress, confined by an AppArmor profile.
+  through ingress (screen images included), confined by an AppArmor profile.

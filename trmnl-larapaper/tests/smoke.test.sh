@@ -85,6 +85,29 @@ check "ingress: redirects stay under the prefix" sh -c \
     "curl -s -o /dev/null -w '%{redirect_url}' -H 'X-Ingress-Path: /api/hassio_ingress/abc' http://127.0.0.1:8099/dashboard | grep -q '/api/hassio_ingress/abc/login'"
 check "ingress: links carry the prefix" sh -c \
     "curl -s -H 'X-Ingress-Path: /api/hassio_ingress/abc' http://127.0.0.1:8099/login | grep -q '/api/hassio_ingress/abc/'"
+# Screen image links (APP_URL/storage/...) point through ingress, in pages and in JSON
+# with escaped slashes, as LaraPaper writes them; the device API port keeps APP_URL
+# shellcheck disable=SC2016 # PHP code
+docker exec -i "$APP" sh -c 'cat > /var/www/html/public/smoke-urls.php' <<'PHP'
+<?php
+$src = 'http://localhost:4567/storage/images/generated/x.png';
+if (isset($_GET['json'])) {
+    header('Content-Type: application/json');
+    echo json_encode(['src' => $src]);
+} else {
+    echo "<img src=\"$src\">";
+}
+PHP
+# <url on the ingress port|device port> <text the body must contain>
+# shellcheck disable=SC2329 # run by check
+ingress_has() { curl -s -H 'X-Ingress-Path: /api/hassio_ingress/abc' "http://127.0.0.1:8099$1" | grep -qF "$2"; }
+# shellcheck disable=SC2329 # run by check
+device_has() { curl -s "http://localhost:4567$1" | grep -qF "$2"; }
+check "ingress: screen images in pages" ingress_has /smoke-urls.php 'src="/api/hassio_ingress/abc/storage/images/generated/x.png"'
+check "ingress: screen images in JSON" ingress_has '/smoke-urls.php?json=1' '"/api/hassio_ingress/abc/storage/images'
+check "device port: screen images keep the App URL" device_has /smoke-urls.php 'src="http://localhost:4567/storage/'
+check "ingress: serves screen images" test "$(code -H 'X-Ingress-Path: /api/hassio_ingress/abc' http://127.0.0.1:8099/storage/images/setup-logo.bmp)" = 200
+docker exec "$APP" rm -f /var/www/html/public/smoke-urls.php
 
 # --- Restart with other options ---------------------------------------------------
 start '{"app_url": "http://localhost:4567/", "registration_enabled": true}'

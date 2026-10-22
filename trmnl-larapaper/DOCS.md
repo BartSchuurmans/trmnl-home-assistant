@@ -47,10 +47,10 @@ access, so LaraPaper itself never has to be reachable from the internet. You sti
 to LaraPaper there; passkeys you created at `http://<ha-ip>:4567` don't work under Home
 Assistant's address, a password does.
 
-Screen images in the web UI still link to the App URL
-([LaraPaper #289](https://github.com/usetrmnl/larapaper/issues/289)), so they only show
-where your browser can reach that address: at home, and not when Home Assistant itself is
-on https.
+LaraPaper links screen images to the App URL
+([LaraPaper #289](https://github.com/usetrmnl/larapaper/issues/289)); inside Home
+Assistant the add-on points those links through Home Assistant instead, so the images
+show there too.
 
 At home, the web UI is also at the App URL (port 4567), next to the TRMNL's device API.
 
