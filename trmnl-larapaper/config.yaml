@@ -6,7 +6,6 @@ description: >-
   Runs LaraPaper, a self-hosted TRMNL server (BYOS) with recipes, playlists and
   mashups, with its web UI inside Home Assistant
 url: https://github.com/usetrmnl/trmnl-home-assistant
-image: ghcr.io/usetrmnl/trmnl-larapaper-{arch}
 arch:
   - aarch64
   - amd64
