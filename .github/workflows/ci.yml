@@ -38,7 +38,9 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-latest
+    # The ImageMagick 7 setup below copies Debian bookworm's binaries and fills in the
+    # libraries Ubuntu 24.04 lacks; newer runner images drop more (libxml2.so.2)
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
