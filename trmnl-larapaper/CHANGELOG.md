@@ -18,7 +18,7 @@ first bundles it), followed by the add-on's own changes under "Home Assistant ad
   and the scheduler ran as `www-data` with root's home directory, where Chromium can't
   start, so every queued render failed (the "Pre-render playlist items" Lab feature,
   playlist item cache warm/refresh). They now use `www-data`'s own.
-- The smoke test checks both have a home directory they can write.
+- The smoke test renders a screen through the queue worker.
 
 ## [0.47.0] - 2026-11-15
 

@@ -71,11 +71,32 @@ check "renders a screen" docker exec "$APP" test -s "${png:-/missing}"
 for service in queue:work schedule:work; do
     check "$service runs as www-data" sh -c \
         "docker exec $APP ps -o user,args | grep 'artisan $service' | grep -v grep | grep -q '^www-data'"
-    # with a HOME it can write: Chromium (every render in a queued job) fails without one
-    home=$(docker exec -u www-data "$APP" sh -c "pid=\$(pgrep -f '[a]rtisan $service' | head -1);
-        tr '\\0' '\\n' < /proc/\$pid/environ | sed -n 's/^HOME=//p'")
-    check "$service has a writable HOME (${home:-none})" docker exec -u www-data "$APP" test -w "${home:-/missing}"
 done
+
+# A screen rendered in the queue worker: Chromium needs a home directory it can write,
+# which the worker lacked in 0.46.0-2 (root's, as s6 starts it as root). Rendered from a
+# device, as LaraPaper's queued renders are (pre-render, playlist item cache)
+# shellcheck disable=SC2016 # PHP code
+device=$(docker exec -u www-data "$APP" php artisan tinker --execute '
+    $model = App\Models\DeviceModel::where("name", "og_png")->firstOrFail();
+    $device = App\Models\Device::create(["name" => "smoke", "friendly_name" => "smoke",
+        "mac_address" => "00:00:5E:00:53:01", "api_key" => "smoke", "device_model_id" => $model->id]);
+    $markup = Illuminate\Support\Facades\Blade::render("<x-trmnl::screen>".view("trmnl")->render()."</x-trmnl::screen>");
+    App\Jobs\GenerateScreenJob::dispatch($device->id, null, $markup);
+    echo "device=", $device->id;' 2>&1 | sed -n 's/^device=//p')
+# shellcheck disable=SC2016 # PHP code
+queued_png() {
+    docker exec -u www-data "$APP" php artisan tinker --execute '
+        $image = App\Models\Device::find('"${device:-0}"')?->current_screen_image;
+        echo "png=", $image ? Illuminate\Support\Facades\Storage::disk("public")->path("images/generated/$image.png") : "";' \
+        2>/dev/null | sed -n 's/^png=//p'
+}
+for _ in $(seq 1 30); do
+    png=$(queued_png)
+    [ -n "$png" ] && break
+    sleep 2
+done
+check "renders a screen in the queue worker" docker exec "$APP" test -s "${png:-/missing}"
 
 # A recipe transform (LaraPaper 0.47.0+) runs: Node under its permission model, so a
 # confined add-on (SMOKE_DOCKER_ARGS) is shown to allow it
